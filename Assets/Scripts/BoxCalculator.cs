@@ -1,79 +1,121 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEditor.ShaderGraph.Internal;
 using UnityEngine;
-using UnityEngine.Rendering;
+using TMPro;
+using UnityEngine.UI;
 
 public class BoxCalculator : MonoBehaviour
 {
-    //Box properties and dimension variables
-    private float _boxLength = 23f;
-    private float _boxBreadth = 15f;
-    private float _boxHeight = 12f;
-    private float _boxGSM = 200f;
-    private int _numberOfPly = 5;
-    private float _paperCost = 33.5f;
+    // Input References
+    public TMP_InputField lengthInput;
+    public TMP_InputField breadthInput;
+    public TMP_InputField heightInput;
+    public TMP_InputField gsmInput;
+    public TMP_Dropdown plyDropdown;
+    public TMP_Dropdown fluteSizeDropdown;
+    public TMP_InputField paperCostInput;
+    public Button submitButton;
 
-    void Start()
-    {
-        CalculateBoxWeight();
-        CalculateBoxCost();
-        Debug.Log(CalculateBoxCost());
-    }
+    // Output References (Results Panel)
+    public TMP_Text reelSizeValueText;
+    public TMP_Text cuttingSizeValueText;
+    public TMP_Text boxWeightValueText;
+    public TMP_Text boxProductionCostValueText;
+    public TMP_Text totalGSMValueText;
 
-    void Update()
+    // Box properties and dimension variables
+    private float _boxLength;
+    private float _boxBreadth;
+    private float _boxHeight;
+    private float _boxGSM;
+    private int _numberOfPly;
+    private float _paperCost;
+
+    // Allowances
+    private const float FlopAllowance = 2f;
+    private const float CuttingAllowance = 1.2f;
+
+    public void OnSubmit()
     {
-        
+        // Parse input values from the UI
+        _boxLength = float.Parse(lengthInput.text);
+        _boxBreadth = float.Parse(breadthInput.text);
+        _boxHeight = float.Parse(heightInput.text);
+        _boxGSM = float.Parse(gsmInput.text);
+        int[] plyOptions = { 3, 5, 7 };
+        _numberOfPly = plyOptions[plyDropdown.value];
+        Debug.Log("Selected Number of Ply: " + _numberOfPly);
+        _paperCost = float.Parse(paperCostInput.text);
+
+        // Determine which flute size is selected
+        string fluteSize = fluteSizeDropdown.options[fluteSizeDropdown.value].text;
+
+        // Calculate based on the flute size
+        float finalGSM = (fluteSize == "Small") ? CalculateBoxGSMSmallFlute(_boxGSM) : CalculateBoxGSMLargeFlute(_boxGSM);
+        float boxWeight = CalculateBoxWeight(finalGSM);
+        float boxCost = CalculateBoxCost(boxWeight);
+
+        float reelSize = CalculateReelSize(_boxBreadth, _boxHeight);
+        float cuttingSize = CalculateCuttingSize(_boxLength, _boxBreadth);
+
+        // Update the results panel with calculated values
+        reelSizeValueText.text = reelSize.ToString("F2");
+        cuttingSizeValueText.text = cuttingSize.ToString("F2");
+        boxWeightValueText.text = boxWeight.ToString("F2");
+        boxProductionCostValueText.text = boxCost.ToString("F2");
+        totalGSMValueText.text = finalGSM.ToString("F2");
     }
 
     float CalculateReelSize(float breadth, float height)
     {
-        return breadth + height;
+        return breadth + height + FlopAllowance;
     }
 
     float CalculateCuttingSize(float length, float breadth)
-    { 
-        return length + breadth;
+    {
+        return length + breadth + CuttingAllowance;
     }
 
     float CalculateBoxGSMSmallFlute(float gsm)
     {
-        float FinalGSM;
-        switch (_numberOfPly)
+        float finalGSM = 0f;
+        float fluteGSM = gsm * 1.4f;
+
+        for (int i = 0; i < _numberOfPly; i++)
         {
-            case 3:
-                FinalGSM = gsm + (gsm + (gsm * 0.4f)) + gsm;
-                break;
-
-            case 5:
-                FinalGSM = gsm + (gsm + (gsm * 0.4f)) + gsm + (gsm + (gsm * 0.4f)) + gsm;
-                break;
-
-            case 7:
-                FinalGSM = gsm + (gsm + (gsm * 0.4f)) + gsm + (gsm + (gsm * 0.4f)) + gsm + (gsm + (gsm * 0.4f)) + gsm;
-                break;
-
-            default:
-                return FinalGSM = 0;
+            finalGSM += (i % 2 == 0) ? gsm : fluteGSM;
         }
-        return FinalGSM;
+
+        return finalGSM;
     }
 
-    float CalculateBoxWeight()
+    float CalculateBoxGSMLargeFlute(float gsm)
     {
-        float flopAllowance = 2f;
-        float cuttingAllowance = 1.2f;
+        float finalGSM = 0f;
 
-        float reelSize = CalculateReelSize(_boxBreadth, _boxHeight) + flopAllowance;
-        float cuttingSize = CalculateCuttingSize(_boxLength, _boxBreadth) + cuttingAllowance;
+        for (int i = 0; i < _numberOfPly; i++)
+        {
+            if (i % 2 == 0)
+            {
+                finalGSM += gsm;
+            }
+            else
+            {
+                finalGSM += gsm * ((i == 1) ? 1.5f : 1.4f);
+            }
+        }
 
-        float BoxWeight = (((reelSize * cuttingSize * CalculateBoxGSMSmallFlute(_boxGSM))/3100f)/500f) * 2f;
-
-        return BoxWeight;
+        return finalGSM;
     }
 
-    float CalculateBoxCost()
+    float CalculateBoxWeight(float finalGSM)
     {
-        return CalculateBoxWeight() * _paperCost;
+        float reelSize = CalculateReelSize(_boxBreadth, _boxHeight);
+        float cuttingSize = CalculateCuttingSize(_boxLength, _boxBreadth);
+
+        return (reelSize * cuttingSize * finalGSM / 3100f) / 500f * 2f;
+    }
+
+    float CalculateBoxCost(float boxWeight)
+    {
+        return boxWeight * _paperCost;
     }
 }
